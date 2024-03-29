@@ -1,38 +1,82 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
 func main() {
-
-	url := "https://oresrekhovo-zuevo.hh.ru/vacancy/94934082?query=Middle+java+developer&hhtmFrom=vacancy_search_list"
+	// Открываем файл HTML с данными о вакансии
+	url := "https://hh.ru/vacancy/95473687?query=Python+developer&hhtmFrom=vacancy_search_list"
 	resp, err := http.Get(url)
-
-	// закрыте запроса
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		log.Fatalf("failed to fetch data: %d %s", resp.StatusCode, resp.Status)
-	}
-
+	// Создаем новый документ goquery из файла HTML
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
-
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	//salary := doc.Find("span.bloko-header-section-2 bloko-header-section-2_lite").Text()
-	// smth := doc.Find("h1.bloko-header-section-1").Text()
-	smth := doc.Find("h1.bloko-header-section-1>div>span.bloko-header-section-2 bloko-header-section-2_lite").Text()
-	fmt.Println("1")
-	fmt.Println(string(smth))
-	fmt.Println("1")
+	location := extractJobLocation(doc)
+	if location == "" {
+		fmt.Println("Местоположение вакансии не найдено.")
+	} else {
+		fmt.Println("Местоположение вакансии:", location)
+	}
+	// тестирую вывод заралпаты
+	name := doc.Find("h1.bloko-header-section-1").Text()
+	fmt.Println(name)
+	salary := doc.Find("div.vacancy-title>div>span").Text()
+	fmt.Println(salary)
+}
+
+// extractJobLocation извлекает местоположение вакансии из документа goquery
+func extractJobLocation(doc *goquery.Document) string {
+	var location string
+	// Ищем все скрипты в документе
+	doc.Find("script").Each(func(i int, s *goquery.Selection) {
+		// Проверяем, является ли скрипт JSON-LD
+		if val, _ := s.Attr("type"); val == "application/ld+json" {
+			jsonData := strings.TrimSpace(s.Text())
+			// Проверяем, содержит ли JSON данные о местоположении вакансии
+			if strings.Contains(jsonData, "jobLocation") {
+				location = extractLocationFromJSON(jsonData)
+			}
+		}
+	})
+
+	return location
+}
+
+func extractLocationFromJSON(jsonStr string) string {
+	var data map[string]interface{}
+	err := json.Unmarshal([]byte(jsonStr), &data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	locationData, ok := data["jobLocation"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	address, ok := locationData["address"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	addressLocality, _ := address["addressLocality"].(string)
+	addressRegion, _ := address["addressRegion"].(string)
+	streetAddress, _ := address["streetAddress"].(string)
+
+	location := fmt.Sprintf("%s, %s, %s", addressLocality, addressRegion, streetAddress)
+	return location
 }
