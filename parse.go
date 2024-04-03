@@ -11,14 +11,39 @@ import (
 )
 
 func main() {
-	// Открываем файл HTML с данными о вакансии
-	url := "https://hh.ru/vacancy/95473687?query=Python+developer&hhtmFrom=vacancy_search_list"
+	links := make([]string, 10)
+	// Открываем HTML страницу с вакансиями
+	mainurl := "https://hh.ru/search/vacancy?text=Python&salary=&ored_clusters=true&area=113&hhtmFrom=vacancy_search_list&hhtmFromLabel=vacancy_search_line"
+	findpage(mainurl, links)
+	a := "https://hh.ru/vacancy/95473687?query=Python+developer&hhtmFrom=vacancy_search_list"
+	all(a)
+	fmt.Println(links)
+}
+
+func findpage(url string, links []string) {
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
+	doc, _ := goquery.NewDocumentFromReader(resp.Body)
+	c := 0
+	doc.Find("span.serp-item__title-link-wrapper>a").Each(func(i int, s *goquery.Selection) {
+		hr, _ := s.Attr("href")
+		// links = append(links, hr)
+		links = append(links, hr)
+		c++
+		fmt.Println(hr)
+	})
+	fmt.Println(c)
+}
 
+func all(url string) {
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
 	// Создаем новый документ goquery из файла HTML
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
@@ -26,16 +51,19 @@ func main() {
 	}
 
 	location := extractJobLocation(doc)
-	if location == "" {
-		fmt.Println("Местоположение вакансии не найдено.")
-	} else {
-		fmt.Println("Местоположение вакансии:", location)
-	}
+	title, salary := extractsalary(doc)
+
+	// Вывод переменных
+	fmt.Println(location)
+	fmt.Println(title)
+	fmt.Println(salary)
+}
+func extractsalary(doc *goquery.Document) (string, string) {
+
 	// тестирую вывод заралпаты
 	name := doc.Find("h1.bloko-header-section-1").Text()
-	fmt.Println(name)
 	salary := doc.Find("div.vacancy-title>div>span").Text()
-	fmt.Println(salary)
+	return name, salary
 }
 
 // extractJobLocation извлекает местоположение вакансии из документа goquery
